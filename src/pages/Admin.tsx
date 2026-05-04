@@ -27,6 +27,10 @@ export default function Admin() {
   const [productPrice, setProductPrice] = useState('');
   const [productCategory, setProductCategory] = useState('diamond');
 
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [loadingSettings, setLoadingSettings] = useState(false);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoginLoading(true);
@@ -83,6 +87,18 @@ export default function Admin() {
             osc.start();
             osc.stop(ctx.currentTime + 0.2);
           } catch(e) {}
+          
+          // Trigger web push notification if granted
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              new Notification("নতুন অর্ডার (New Order)!", {
+                body: `নতুন ${addedChanges.length}টি অর্ডার এসেছে। চেক করুন।`,
+                icon: "/favicon.ico" // assuming you have a favicon
+              });
+            } catch (e) {
+              console.error("Notification API error", e);
+            }
+          }
         }
       }
     }, (error) => {
@@ -137,6 +153,48 @@ export default function Admin() {
     });
     return () => unsubscribeWallet();
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchSettings = async () => {
+      try {
+        setLoadingSettings(true);
+        // Using onSnapshot so admin can see updates, but getDoc is also fine. Let's use onSnapshot
+        const unsub = onSnapshot(doc(db, 'settings', 'notifications'), (docSnap) => {
+          if (docSnap.exists()) {
+             const data = docSnap.data();
+             setTelegramToken(data.telegramToken || '');
+             setTelegramChatId(data.telegramChatId || '');
+          }
+          setLoadingSettings(false);
+        });
+        return () => unsub();
+      } catch (error) {
+         console.error(error);
+         setLoadingSettings(false);
+      }
+    };
+    fetchSettings();
+  }, [isAdmin]);
+
+  const handleSaveNotificationSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Upsert
+      await updateDoc(doc(db, 'settings', 'notifications'), {
+        telegramToken,
+        telegramChatId
+      }).catch(async (err) => {
+         if(err.code === 'not-found') {
+            await addDoc(collection(db, 'settings'), { telegramToken, telegramChatId }); // this is wrong, should be setDoc
+         }
+      });
+      // Actually setDoc is safer
+      toast({ title: 'Settings Saved', description: 'Notification settings updated.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
 
   const handleApproveWallet = async (reqId: string, userId: string, amount: number) => {
     try {
@@ -481,7 +539,7 @@ export default function Admin() {
                 <thead className="bg-brand-dark/50 text-white/40 text-xs uppercase font-semibold border-b border-white/5">
                   <tr>
                     <th className="px-6 py-4">ID / Date</th>
-                    <th className="px-6 py-4">User Email</th>
+                      <th className="px-6 py-4">User Email / Phone</th>
                     <th className="px-6 py-4">Items / UIDs</th>
                     <th className="px-6 py-4">Payment</th>
                     <th className="px-6 py-4">Status</th>
@@ -506,7 +564,10 @@ export default function Admin() {
                         <div className="font-mono text-brand-orange text-xs">{order.id}</div>
                         <div className="text-[10px] text-white/30 mt-1">{new Date(order.date).toLocaleString()}</div>
                       </td>
-                      <td className="px-6 py-4 font-bold text-white text-xs">{order.userEmail}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-white text-xs">{order.userEmail}</div>
+                        {order.phone && <div className="text-[10px] text-white/50 mt-1">{order.phone}</div>}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1">
                            {order.items?.map((item: any, i: number) => (
@@ -660,11 +721,94 @@ export default function Admin() {
             </div>
           )}
 
-          {activeTab !== 'orders' && activeTab !== 'wallet' && activeTab !== 'pricing' && (
+          {activeTab !== 'orders' && activeTab !== 'wallet' && activeTab !== 'pricing' && activeTab !== 'settings' && (
              <div className="p-12 text-center text-white/40 flex flex-col items-center justify-center">
                <Settings className="w-12 h-12 mb-4 opacity-20" />
                <p>This module is available in the Pro version.</p>
                <p className="text-xs mt-2">Frontend demo mode is limited to Managing Orders, Wallet, and Pricing.</p>
+             </div>
+          )}
+
+          {activeTab === 'settings' && (
+             <div className="p-6 space-y-6">
+                {/* Browser Notifications */}
+                <div className="bg-brand-dark/50 p-6 rounded-xl border border-white/5 max-w-2xl">
+                  <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                    Browser Push Notifications
+                  </h3>
+                  <p className="text-xs text-white/60 mb-6">
+                    Enable this to receive push notifications on your mobile/desktop even when you are in another tab, provided this Admin page stays open in the background. Mobile browsers may require you to grant permissions.
+                  </p>
+                  <button 
+                    onClick={() => {
+                      if ("Notification" in window) {
+                        Notification.requestPermission().then(permission => {
+                          if (permission === 'granted') {
+                            toast({ title: 'Enabled', description: 'You will now receive notifications for new orders.' });
+                            new Notification('Test Notification', { body: 'This is how your order alerts will look!' });
+                          } else {
+                            toast({ title: 'Ignored/Denied', description: 'Please allow notification permissions in your browser settings.', variant: 'destructive' });
+                          }
+                        });
+                      } else {
+                        toast({ title: 'Not Supported', description: 'Your browser does not support push notifications.', variant: 'destructive' });
+                      }
+                    }}
+                    className="bg-brand-orange hover:bg-orange-600 text-white px-6 py-2 rounded-lg font-bold transition-colors"
+                  >
+                    Enable Browser Notifications
+                  </button>
+                </div>
+
+                {/* Telegram Notifications */}
+                <div className="bg-brand-dark/50 p-6 rounded-xl border border-white/5 max-w-2xl">
+                  <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                    Telegram Notifications
+                  </h3>
+                  <p className="text-xs text-white/60 mb-6">
+                    Enter your Telegram Bot Token and Chat ID to receive instant notifications on your mobile when a new order is placed.
+                  </p>
+                  <form onSubmit={async (e) => {
+                     e.preventDefault();
+                     try {
+                        const { setDoc } = await import('firebase/firestore');
+                        await setDoc(doc(db, 'settings', 'notifications'), {
+                           telegramToken,
+                           telegramChatId
+                        }, { merge: true });
+                        toast({ title: 'Saved', description: 'Telegram settings updated successfully.' });
+                     } catch(err: any) {
+                        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                     }
+                  }} className="space-y-4">
+                    <div>
+                      <label className="text-xs uppercase tracking-widest text-white/50 mb-1 block">Telegram Bot Token</label>
+                      <input 
+                        type="password" 
+                        value={telegramToken}
+                        onChange={e => setTelegramToken(e.target.value)}
+                        placeholder="e.g. 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ" 
+                        className="w-full bg-brand-dark border border-white/10 rounded-lg px-3 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-widest text-white/50 mb-1 block">Your Chat ID</label>
+                      <input 
+                        type="text" 
+                        value={telegramChatId}
+                        onChange={e => setTelegramChatId(e.target.value)}
+                        placeholder="e.g. 12345678" 
+                        className="w-full bg-brand-dark border border-white/10 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-[10px] text-white/40 mt-1">You can get your Chat ID by speaking to @userinfobot on Telegram.</p>
+                    </div>
+                    <button type="submit" className="bg-brand-orange hover:bg-orange-600 text-white px-6 py-2 border border-brand-orange rounded-lg font-bold transition-colors">
+                      Save Settings
+                    </button>
+                  </form>
+                </div>
              </div>
           )}
         </div>

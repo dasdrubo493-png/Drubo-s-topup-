@@ -6,8 +6,44 @@ import { toast } from '../components/ui/toaster';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+
+const sendTelegramNotification = async (orderData: any, amount: number) => {
+  try {
+    const settingsSnap = await getDoc(doc(db, 'settings', 'notifications'));
+    if (settingsSnap.exists()) {
+      const { telegramToken, telegramChatId } = settingsSnap.data();
+      if (telegramToken && telegramChatId) {
+        let msg = `🛍️ *New Order Received*\n\n`;
+        msg += `*Method:* ${orderData.method}\n`;
+        msg += `*Amount:* ৳${amount}\n`;
+        msg += `*Email:* ${orderData.userEmail}\n`;
+        if (orderData.phone) msg += `*Phone:* ${orderData.phone}\n`;
+        if (orderData.trxId) msg += `*TrxID:* \`${orderData.trxId}\`\n\n`;
+        
+        msg += `*Items:*\n`;
+        orderData.items.forEach((item: any) => {
+          msg += `- ${item.title} (Qty: ${item.quantity})\n  UID: \`${item.uid}\`\n`;
+        });
+        
+        await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+             chat_id: telegramChatId,
+             text: msg,
+             parse_mode: 'Markdown'
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send telegram notification:", error);
+  }
+};
 
 const methods = [
   { id: 'wallet', name: "Drubo's Wallet", color: 'bg-brand-orange', border: 'border-brand-orange', instruction: 'Pay easily with your wallet' },
@@ -74,7 +110,7 @@ export default function Checkout() {
           balance: increment(-total)
         });
         
-        await addDoc(collection(db, 'orders'), {
+        const orderData = {
           userEmail: user.email,
           userId: user.uid,
           items: items,
@@ -84,7 +120,9 @@ export default function Checkout() {
           trxId: `WT-${Date.now().toString().slice(-6)}`,
           date: new Date().toISOString(),
           status: 'pending'
-        });
+        };
+        await addDoc(collection(db, 'orders'), orderData);
+        sendTelegramNotification(orderData, total);
 
         setHasSubmitted(true);
         setShowSuccessAnimation(true);
@@ -110,8 +148,8 @@ export default function Checkout() {
     setIsSubmitting(true);
     
     // Simulate 2 seconds verifying for bkash
-    setTimeout(() => {
-      addDoc(collection(db, 'orders'), {
+    setTimeout(async () => {
+      const orderData = {
         userEmail: user.email,
         userId: user.uid,
         items: items,
@@ -121,7 +159,9 @@ export default function Checkout() {
         trxId,
         date: new Date().toISOString(),
         status: 'pending'
-      }).catch(error => console.error("Error creating order:", error));
+      };
+      addDoc(collection(db, 'orders'), orderData).catch(error => console.error("Error creating order:", error));
+      sendTelegramNotification(orderData, total);
       
       setHasSubmitted(true);
       setIsSubmitting(false);
@@ -146,7 +186,7 @@ export default function Checkout() {
         <ChevronLeft className="w-4 h-4" /> Continue Shopping
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="flex flex-col-reverse lg:grid lg:grid-cols-2 gap-8">
         {/* Left: Cart Summary */}
         <div className="bg-brand-card rounded-xl border border-white/5 p-4 sm:p-6 h-fit">
            <div className="flex items-center justify-between mb-6">
