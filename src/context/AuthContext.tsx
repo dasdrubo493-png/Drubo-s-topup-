@@ -126,8 +126,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginGoogle = async () => {
-    const cred = await signInWithPopup(auth, googleProvider);
-    await recordLogin(cred.user, 'google_login');
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      await recordLogin(cred.user, 'google_login');
+    } catch (error: any) {
+      console.error("Google Login Error:", error);
+      let errorMessage = "Could not login with Google.";
+      
+      if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Login popup was closed before completing.";
+      } else if (error.code === 'auth/unauthorized-domain') {
+        errorMessage = "This domain is not authorized for Google login. You need to add this URL to the Firebase console > Authentication > Settings > Authorized domains.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const logout = async () => {
