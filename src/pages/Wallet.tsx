@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Wallet as WalletIcon, PlusCircle, Clock, CheckCircle2, XCircle, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, where, orderBy, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { toast } from '../components/ui/toaster';
 
@@ -15,6 +15,36 @@ interface WalletRequest {
   status: 'pending' | 'approved' | 'rejected';
   date: string;
 }
+
+const sendWalletTelegramNotification = async (requestData: any) => {
+  try {
+    const settingsSnap = await getDoc(doc(db, 'settings', 'notifications'));
+    if (settingsSnap.exists()) {
+      const { telegramToken, telegramChatId } = settingsSnap.data();
+      if (telegramToken && telegramChatId) {
+        let msg = `💰 *New Wallet Request*\n\n`;
+        msg += `*Amount:* ৳${requestData.amount}\n`;
+        msg += `*Email:* ${requestData.userEmail}\n`;
+        msg += `*Sender Number:* ${requestData.senderNumber}\n`;
+        msg += `*TrxID:* \`${requestData.trxId}\`\n`;
+        
+        await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+             chat_id: telegramChatId,
+             text: msg,
+             parse_mode: 'Markdown'
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send telegram notification:", error);
+  }
+};
 
 export default function Wallet() {
   const { user } = useAuth();
@@ -64,7 +94,7 @@ export default function Wallet() {
 
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'wallet_requests'), {
+      const requestData = {
         userId: user.uid,
         userEmail: user.email,
         amount: numAmount,
@@ -72,7 +102,10 @@ export default function Wallet() {
         trxId,
         status: 'pending',
         date: new Date().toISOString()
-      });
+      };
+      
+      await addDoc(collection(db, 'wallet_requests'), requestData);
+      sendWalletTelegramNotification(requestData);
       
       toast({ title: 'সফল হয়েছে!', description: 'আপনার রিকোয়েস্টটি পেন্ডিং এ আছে। এডমিন চেক করে এপ্রুভ করবে।' });
       setAmount('');

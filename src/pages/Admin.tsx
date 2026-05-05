@@ -201,9 +201,10 @@ export default function Admin() {
       // 1. Update wallet request status
       await updateDoc(doc(db, 'wallet_requests', reqId), { status: 'approved' });
       // 2. Increment user balance
-      await updateDoc(doc(db, 'users', userId), {
+      const { setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', userId), {
         balance: increment(amount)
-      });
+      }, { merge: true });
       toast({ title: 'Success', description: 'Wallet top-up approved' });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -511,20 +512,22 @@ export default function Admin() {
                           {req.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
                         {req.status === 'pending' && (
                            <>
-                             <button onClick={() => handleApproveWallet(req.id, req.userId, req.amount)} className="p-1.5 hover:bg-green-500/20 rounded text-green-400 transition-colors" title="Approve">
-                               <CheckCircle2 className="w-4 h-4" />
+                             <button onClick={() => handleApproveWallet(req.id, req.userId, req.amount)} className="p-1.5 flex items-center justify-center hover:bg-green-500/20 rounded text-green-400 transition-colors cursor-pointer" title="Approve">
+                               <CheckCircle2 className="w-5 h-5 pointer-events-none" />
                              </button>
-                             <button onClick={() => handleRejectWallet(req.id)} className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors" title="Reject">
-                               <XCircle className="w-4 h-4" />
+                             <button onClick={() => handleRejectWallet(req.id)} className="p-1.5 flex items-center justify-center hover:bg-red-500/20 rounded text-red-400 transition-colors cursor-pointer" title="Reject">
+                               <XCircle className="w-5 h-5 pointer-events-none" />
                              </button>
                            </>
                         )}
-                        <button onClick={() => handleDeleteWalletRequest(req.id)} className="p-1.5 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors" title="Delete">
-                          <Trash2 className="w-4 h-4" />
+                        <button onClick={() => handleDeleteWalletRequest(req.id)} className="p-1.5 flex items-center justify-center hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors cursor-pointer" title="Delete">
+                          <Trash2 className="w-5 h-5 pointer-events-none" />
                         </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -599,20 +602,22 @@ export default function Admin() {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
                         {order.status === 'pending' && (
                            <>
-                             <button onClick={() => handleUpdateStatus(order.id, 'completed')} className="p-1.5 hover:bg-green-500/20 rounded text-green-400 transition-colors" title="Approve">
-                               <CheckCircle2 className="w-4 h-4" />
+                             <button onClick={() => handleUpdateStatus(order.id, 'completed')} className="p-1.5 flex items-center justify-center hover:bg-green-500/20 rounded text-green-400 transition-colors cursor-pointer" title="Approve">
+                               <CheckCircle2 className="w-5 h-5 pointer-events-none" />
                              </button>
-                             <button onClick={() => handleUpdateStatus(order.id, 'rejected')} className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors" title="Reject">
-                               <XCircle className="w-4 h-4" />
+                             <button onClick={() => handleUpdateStatus(order.id, 'rejected')} className="p-1.5 flex items-center justify-center hover:bg-red-500/20 rounded text-red-400 transition-colors cursor-pointer" title="Reject">
+                               <XCircle className="w-5 h-5 pointer-events-none" />
                              </button>
                            </>
                         )}
-                        <button onClick={() => handleDelete(order.id)} className="p-1.5 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors" title="Delete">
-                          <Trash2 className="w-4 h-4" />
+                        <button onClick={() => handleDelete(order.id)} className="p-1.5 flex items-center justify-center hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors cursor-pointer" title="Delete">
+                          <Trash2 className="w-5 h-5 pointer-events-none" />
                         </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
