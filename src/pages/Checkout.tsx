@@ -58,6 +58,10 @@ export default function Checkout() {
   
   const [selectedMethod, setSelectedMethod] = useState(methods[0].id);
   const [phone, setPhone] = useState('');
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [trxId, setTrxId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -186,7 +190,7 @@ export default function Checkout() {
         <ChevronLeft className="w-4 h-4" /> Continue Shopping
       </button>
 
-      <div className="flex flex-col-reverse lg:grid lg:grid-cols-2 gap-8">
+      <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8">
         {/* Left: Cart Summary */}
         <div className="bg-brand-card rounded-xl border border-white/5 p-4 sm:p-6 h-fit">
            <div className="flex items-center justify-between mb-6">
